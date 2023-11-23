@@ -4,6 +4,8 @@ from pydantic import BaseModel
 from web_scraping import web_scrapping
 from transformers import AutoTokenizer, PegasusXForConditionalGeneration
 from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+import os
 
 class Item(BaseModel):
     url: str
@@ -13,8 +15,11 @@ ml_model = {}
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Load the ML model
-    tokenizer = AutoTokenizer.from_pretrained("C:\\Users\\DuongNgoKien\\Downloads\\results\\results\\checkpoint-376500", use_safetensors=True)
-    model = PegasusXForConditionalGeneration.from_pretrained("C:\\Users\\DuongNgoKien\\Downloads\\results\\results\\checkpoint-376500", use_safetensors=True)
+    load_dotenv()
+    MODEL_PATH = os.getenv('MODEL_PATH')
+    TOKENIZER_PATH = os.getenv('TOKENIZER_PATH')
+    tokenizer = AutoTokenizer.from_pretrained(TOKENIZER_PATH, use_safetensors=True)
+    model = PegasusXForConditionalGeneration.from_pretrained(MODEL_PATH, use_safetensors=True)
     ml_model['model'] = model
     ml_model['tokenizer'] = tokenizer
     yield

@@ -1,0 +1,20 @@
+{
+    "manifest_version": 3,
+    "name": "Web summary",
+    "description": "This extension gives you a summary from WikiPedia.",
+    "version": "1.0", 
+    "action": {
+        "default_popup": "popup.html"
+      },
+    "permissions": [
+        "tabs",
+		    "background",
+        "contextMenus"
+      ],
+    "host_permissions": [
+        "http://127.0.0.1:8000/"
+      ],
+    "background": {
+        "service_worker": "background.js"
+    }
+}

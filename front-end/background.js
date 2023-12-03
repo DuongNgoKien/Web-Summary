@@ -23,11 +23,3 @@ var serverhost = 'http://127.0.0.1:8000';
 				
 			return true;  // Will respond asynchronously.
 });
-
-var contextMenuItem = {
-    "id": "summaryText",
-    "title": "SummaryText",
-    "contexts": ["all"]
-}
-
-chrome.contextMenus.create(contextMenuItem)

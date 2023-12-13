@@ -1,0 +1,9 @@
+{
+    "seed": 1,
+    "batch_size": 1,
+
+    "d_model": 768,
+    "src_num_layers": 12,
+    "tgt_num_layers": 12
+
+}

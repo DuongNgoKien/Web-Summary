@@ -68,7 +68,7 @@ def generate_mask(src_attn_mask, tgt_attn_mask):
             src_attn_mask.to(torch.bool),
             mask_min_value,
         )
-        
+
         tgt_seq_length = tgt_attn_mask.size(1)
         tgt_attn_mask = tgt_attn_mask[:,None,:].expand(-1,-1,tgt_seq_length)
         nopeak_mask = (1 - torch.triu(torch.ones(1, tgt_seq_length, tgt_seq_length), diagonal=1)).bool()
@@ -83,12 +83,13 @@ def generate_mask(src_attn_mask, tgt_attn_mask):
 
 def _save_checkpoint(epoch, model, optimizer, config):
     checkpoint = {
-        'iteration': epoch,
+        'epoch': epoch,
         'optimizer': optimizer.state_dict(),
         'config': config,
     }
     checkpoint['model'] = model.state_dict()
     filename = os.path.join(checkpoint_dir, f'checkpoint-iter{epoch}.pth')
+    os.remove(os.path.join(checkpoint_dir, f'checkpoint-iter{epoch - 1}.pth'))
     torch.save(checkpoint, filename)
 
 def _resume_checkpoint(resume_path, model, optimizer):
@@ -152,5 +153,5 @@ if __name__ == "__main__":
     if args.resume:
         start_epoch, pegasus_x, optimizer = _resume_checkpoint(args.resume, pegasus_x, optimizer)
     else:
-        start_epoch = 0
+        start_epoch = 1
     train_PegasusX(start_epoch, pegasus_x, tokenizer, criterion, optimizer, config, args)

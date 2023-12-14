@@ -118,11 +118,11 @@ def train_PegasusX(start_epoch, model, tokenizer, criterion, optimizer, config, 
         for batch in loop:
             optimizer.zero_grad()
 
-            input_ids = batch['input_ids'].to(device)
-            src_attention_mask = batch['attention_mask'].to(device)
-            tgt_attention_mask = batch['tgt_attention_mask'].to(device)
+            input_ids = batch['input_ids'].to(torch_device)
+            src_attention_mask = batch['attention_mask'].to(torch_device)
+            tgt_attention_mask = batch['tgt_attention_mask'].to(torch_device)
             src_attention_mask, tgt_attention_mask = generate_mask(src_attention_mask, tgt_attention_mask)
-            labels = batch['labels'].to(device)
+            labels = batch['labels'].to(torch_device)
             # process
             _, outputs = model(input_ids,labels, src_attention_mask, tgt_attention_mask)
             loss = criterion(outputs[:,:-1,:].permute(0,2,1).contiguous(), labels[:,1:])

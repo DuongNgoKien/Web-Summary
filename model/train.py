@@ -82,6 +82,8 @@ def generate_mask(src_attn_mask, tgt_attn_mask):
         return src_attn_mask, tgt_attn_mask
 
 def _save_checkpoint(epoch, model, optimizer, config):
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
     checkpoint = {
         'epoch': epoch,
         'optimizer': optimizer.state_dict(),

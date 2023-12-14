@@ -93,16 +93,15 @@ def _save_checkpoint(epoch, model, optimizer, config):
         os.remove(os.path.join(checkpoint_dir, f'checkpoint-epoch{epoch - 1}.pth'))
     torch.save(checkpoint, filename)
 
-def _resume_checkpoint(resume_path, model):
+def _resume_checkpoint(resume_path, model, optimizer):
     print(f'Loading checkpoint : {resume_path}')
     checkpoint = torch.load(resume_path)
 
     epoch = checkpoint['epoch'] + 1
     print('Starting at epoch: ' + str(epoch))
     model.load_state_dict(checkpoint['model'])
-    optimizer = optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
     optimizer.load_state_dict(checkpoint['optimizer'])
-    return epoch, model, optimizer
+    return epoch
     
 def train_PegasusX(start_epoch, model, tokenizer, criterion, optimizer, config, args):
     train_texts, train_labels = load_data(text_path, label_path)
@@ -111,8 +110,6 @@ def train_PegasusX(start_epoch, model, tokenizer, criterion, optimizer, config, 
     dataset = PegasusDataset(inputs, labels)
     loader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=True)
 
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    model.to(device)
     model.train()
 
     for epoch in range(start_epoch, start_epoch + config['epochs']):
@@ -155,13 +152,14 @@ if __name__ == "__main__":
                               d_ff = config["decoder_ff"], dropout = config["dropout"], 
                               src_padded_seq_len = int(args.src_len), 
                               tgt_padded_seq_len = int(args.tgt_len))
+    pegasus_x.to(torch_device)
     
+    optimizer = optim.Adam(pegasus_x.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
     criterion = nn.CrossEntropyLoss(ignore_index=0)
-    
+
     if args.resume:
-        start_epoch, pegasus_x, optimizer = _resume_checkpoint(args.resume, pegasus_x)
+        start_epoch = _resume_checkpoint(args.resume, pegasus_x, optimizer)
     else:
-        optimizer = optim.Adam(pegasus_x.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
         start_epoch = 1
     
     train_PegasusX(start_epoch, pegasus_x, tokenizer, criterion, optimizer, config, args)

@@ -10,11 +10,9 @@ import os
 import json
 from tqdm import tqdm
 import argparse
+from datasets import load_dataset
 
 torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
-checkpoint_dir = 'summary_page/model/checkpoint'
-text_path = 'summary_page/model/data/C4_small/texts.txt'
-label_path = 'summary_page/model/data/C4_small/labels.txt'
 
 def set_seed(seed=42):
     np.random.seed(seed)
@@ -37,6 +35,7 @@ def get_arguments():
     parser = argparse.ArgumentParser(description="PEGASUS_X hyperparameters")
     parser.add_argument("--src_len", help="src padded sequence length")
     parser.add_argument("--tgt_len", help="tgt padded sequence length")
+    parser.add_argument("--pretrain", default=True, help="pretrain pegasus_x model with C4 dataset")
     parser.add_argument("-r", "--resume", type=str, default=None,
                         help='Path to the .pth file to resume from (default: None)')
     return parser.parse_args()
@@ -81,7 +80,7 @@ def generate_mask(src_attn_mask, tgt_attn_mask):
         )
         return src_attn_mask, tgt_attn_mask
 
-def _save_checkpoint(epoch, model, optimizer, config):
+def _save_checkpoint(epoch, model, optimizer, checkpoint_dir, config):
     checkpoint = {
         'epoch': epoch,
         'optimizer': optimizer.state_dict(),
@@ -89,8 +88,6 @@ def _save_checkpoint(epoch, model, optimizer, config):
     }
     checkpoint['model'] = model.state_dict()
     filename = os.path.join(checkpoint_dir, f'checkpoint-epoch{epoch}.pth')
-    if epoch > 1:
-        os.remove(os.path.join(checkpoint_dir, f'checkpoint-epoch{epoch - 1}.pth'))
     torch.save(checkpoint, filename)
 
 def _resume_checkpoint(resume_path, model, optimizer):
@@ -103,18 +100,11 @@ def _resume_checkpoint(resume_path, model, optimizer):
     optimizer.load_state_dict(checkpoint['optimizer'])
     return epoch
     
-def train_PegasusX(start_epoch, model, tokenizer, criterion, optimizer, config, args):
-    train_texts, train_labels = load_data(text_path, label_path)
-    inputs = tokenizer(train_texts, return_tensors='pt', padding='max_length', max_length=int(args.src_len), truncation=True)
-    labels = tokenizer(train_labels, return_tensors='pt', padding='max_length', max_length=int(args.tgt_len), truncation=True)
-    dataset = PegasusDataset(inputs, labels)
-    loader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=True)
-
+def train_PegasusX(start_epoch, model, loader, criterion, optimizer, checkpoint_dir, config, args):
     model.train()
 
     for epoch in range(start_epoch, start_epoch + config['epochs']):
         loop = tqdm(loader, leave=True)
-        i = 0
         for batch in loop:
             optimizer.zero_grad()
 
@@ -128,14 +118,18 @@ def train_PegasusX(start_epoch, model, tokenizer, criterion, optimizer, config, 
             loss = criterion(outputs[:,:-1,:].permute(0,2,1).contiguous(), labels[:,1:])
             loss.backward()
             optimizer.step()
-            i += 1
-            if i == 500:
-              break
-        _save_checkpoint(epoch, model, optimizer, config)
+        
+        _save_checkpoint(epoch, model, optimizer, checkpoint_dir, config)
 
 if __name__ == "__main__":
     args = get_arguments()
 
+    if args.pretrain:
+        checkpoint_dir = 'summary_page/model/pretrain/checkpoint'
+        text_path = 'summary_page/model/data/C4_small/texts.txt'
+        label_path = 'summary_page/model/data/C4_small/labels.txt'
+    else:
+        checkpoint_dir = 'summary_page/model/finetune/checkpoint'
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
     
@@ -144,6 +138,22 @@ if __name__ == "__main__":
     tgt_vocab_size = src_vocab_size
     config = json.load(open("summary_page/model/config/configPEGASUS_X.json"))
     set_seed(config['seed'])
+
+    if args.pretrain == False:
+        train_texts, train_labels = load_data(text_path, label_path)
+    else:
+        dataset = load_dataset("ccdv/pubmed-summarization", streaming=True)
+        train_texts = []
+        train_labels = []
+        for index, sample in enumerate(dataset['train']):
+            if index == 10000: break
+            train_texts.append(sample['article'])
+            train_labels.append(sample['abstract'])
+    
+    inputs = tokenizer(train_texts, return_tensors='pt', padding='max_length', max_length=int(args.src_len), truncation=True)
+    labels = tokenizer(train_labels, return_tensors='pt', padding='max_length', max_length=int(args.tgt_len), truncation=True)
+    dataset = PegasusDataset(inputs, labels)
+    loader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=True)
 
     pegasus_x = PegasusXModel(src_vocab_size = src_vocab_size, tgt_vocab_size = tgt_vocab_size, 
                               d_model = config["d_model"], num_heads = config["num_heads"], 
@@ -162,4 +172,4 @@ if __name__ == "__main__":
     else:
         start_epoch = 1
     
-    train_PegasusX(start_epoch, pegasus_x, tokenizer, criterion, optimizer, config, args)
+    train_PegasusX(start_epoch, pegasus_x, loader, criterion, optimizer, checkpoint_dir, config, args)

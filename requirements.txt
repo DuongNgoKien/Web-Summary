@@ -1,6 +1,7 @@
 torch==1.13.1
 torchvision
 transformers
+datasets
 tqdm
 nltk
 rouge-score

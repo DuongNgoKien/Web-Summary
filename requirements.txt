@@ -1,0 +1,14 @@
+torch==1.13.1
+torchvision
+transformers
+tqdm
+nltk
+rouge-score
+evaluate
+argparse
+urllib3
+bs4
+fastapi
+pydantic
+python-dotenv
+numpy

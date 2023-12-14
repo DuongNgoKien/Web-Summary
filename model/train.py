@@ -9,9 +9,10 @@ import random
 import os
 import json
 from tqdm import tqdm
+import argparse
 
 torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
-output_dir = './results'
+checkpoint_dir = 'summary_page/model/checkpoint'
 text_path = 'summary_page/model/data/C4_small/texts.txt'
 label_path = 'summary_page/model/data/C4_small/labels.txt'
 
@@ -27,6 +28,19 @@ def set_seed(seed=42):
     os.environ["PYTHONHASHSEED"] = str(seed)
     print(f"Random seed set as {seed}")
 
+def get_arguments():
+    """Parse all the arguments provided from the CLI.
+
+    Returns:
+      A list of parsed arguments.
+    """
+    parser = argparse.ArgumentParser(description="PEGASUS_X hyperparameters")
+    parser.add_argument("--src_len", help="src padded sequence length")
+    parser.add_argument("--tgt_len", help="tgt padded sequence length")
+    parser.add_argument("-r", "--resume", type=str, default=None,
+                        help='Path to the .pth file to resume from (default: None)')
+    return parser.parse_args()
+
 def load_data(text_path, label_path):
     with open(text_path, 'r', encoding='utf-8') as fp:
         train_texts = fp.read().split('\n')
@@ -39,9 +53,9 @@ class PegasusDataset(Dataset):
         self.encodings = encodings
         self.labels = labels
     def __getitem__(self, idx):
-        item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
-        item['labels'] = torch.tensor(self.labels['input_ids'][idx])
-        item['tgt_attention_mask'] = torch.tensor(self.labels['attention_mask'][idx])
+        item = {key: val[idx].clone().detach() for key, val in self.encodings.items()}
+        item['labels'] = self.labels['input_ids'][idx].clone().detach()
+        item['tgt_attention_mask'] = self.labels['attention_mask'][idx].clone().detach()
         return item
     def __len__(self):
         return len(self.encodings.input_ids)
@@ -54,8 +68,7 @@ def generate_mask(src_attn_mask, tgt_attn_mask):
             src_attn_mask.to(torch.bool),
             mask_min_value,
         )
-
-        tgt_attn_mask = torch.Tensor([[1,1,1,0,0]]).int()
+        
         tgt_seq_length = tgt_attn_mask.size(1)
         tgt_attn_mask = tgt_attn_mask[:,None,:].expand(-1,-1,tgt_seq_length)
         nopeak_mask = (1 - torch.triu(torch.ones(1, tgt_seq_length, tgt_seq_length), diagonal=1)).bool()
@@ -67,11 +80,31 @@ def generate_mask(src_attn_mask, tgt_attn_mask):
             mask_min_value,
         )
         return src_attn_mask, tgt_attn_mask
+
+def _save_checkpoint(epoch, model, optimizer, config):
+    checkpoint = {
+        'iteration': epoch,
+        'optimizer': optimizer.state_dict(),
+        'config': config,
+    }
+    checkpoint['model'] = model.state_dict()
+    filename = os.path.join(checkpoint_dir, f'checkpoint-iter{epoch}.pth')
+    torch.save(checkpoint, filename)
+
+def _resume_checkpoint(resume_path, model, optimizer):
+    print(f'Loading checkpoint : {resume_path}')
+    checkpoint = torch.load(resume_path)
+
+    epoch = checkpoint['epoch'] + 1
+    print('Starting at epoch: ' + str(epoch))
+    model.load_state_dict(checkpoint['model'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    return epoch, model, optimizer
     
-def train_PegasusX(model, tokenizer, criterion, optimizer, config):
+def train_PegasusX(start_epoch, model, tokenizer, criterion, optimizer, config, args):
     train_texts, train_labels = load_data(text_path, label_path)
-    inputs = tokenizer(train_texts, return_tensors='pt', padding='max_length', max_length=16384, truncation=True)
-    labels = tokenizer(train_labels, return_tensors='pt', padding='max_length', max_length=256, truncation=True)
+    inputs = tokenizer(train_texts, return_tensors='pt', padding='max_length', max_length=int(args.src_len), truncation=True)
+    labels = tokenizer(train_labels, return_tensors='pt', padding='max_length', max_length=int(args.tgt_len), truncation=True)
     dataset = PegasusDataset(inputs, labels)
     loader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=True)
 
@@ -79,8 +112,9 @@ def train_PegasusX(model, tokenizer, criterion, optimizer, config):
     model.to(device)
     model.train()
 
-    for _ in range(config['epochs']):
+    for epoch in range(start_epoch, start_epoch + config['epochs']):
         loop = tqdm(loader, leave=True)
+        i = 0
         for batch in loop:
             optimizer.zero_grad()
 
@@ -92,11 +126,15 @@ def train_PegasusX(model, tokenizer, criterion, optimizer, config):
             # process
             _, outputs = model(input_ids,labels, src_attention_mask, tgt_attention_mask)
             loss = criterion(outputs[:,:-1,:].permute(0,2,1).contiguous(), labels[:,1:])
-            print(loss)
             loss.backward()
             optimizer.step()
+            i += 1
+            if i == 500:
+              break
+        _save_checkpoint(epoch, model, optimizer, config)
 
 if __name__ == "__main__":
+    args = get_arguments()
     tokenizer = AutoTokenizer.from_pretrained("google/pegasus-x-base")
     src_vocab_size = len(tokenizer)
     tgt_vocab_size = src_vocab_size
@@ -107,8 +145,12 @@ if __name__ == "__main__":
                               src_num_layers = config["src_num_layers"], tgt_num_layers = config["tgt_num_layers"], 
                               block_size = config["block_size"], num_global_tokens = config["num_global_tokens"], 
                               d_ff = config["decoder_ff"], dropout = config["dropout"], 
-                              src_padded_seq_len = config["src_padded_seq_len"], 
-                              tgt_padded_seq_len = config["tgt_padded_seq_len"])
+                              src_padded_seq_len = int(args.src_len), 
+                              tgt_padded_seq_len = int(args.tgt_len))
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = optim.Adam(pegasus_x.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
-    train_PegasusX(pegasus_x, tokenizer, criterion, optimizer, config)
+    if args.resume:
+        start_epoch, pegasus_x, optimizer = _resume_checkpoint(args.resume, pegasus_x, optimizer)
+    else:
+        start_epoch = 0
+    train_PegasusX(start_epoch, pegasus_x, tokenizer, criterion, optimizer, config, args)

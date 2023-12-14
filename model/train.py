@@ -88,18 +88,19 @@ def _save_checkpoint(epoch, model, optimizer, config):
         'config': config,
     }
     checkpoint['model'] = model.state_dict()
-    filename = os.path.join(checkpoint_dir, f'checkpoint-iter{epoch}.pth')
+    filename = os.path.join(checkpoint_dir, f'checkpoint-epoch{epoch}.pth')
     if epoch > 1:
-        os.remove(os.path.join(checkpoint_dir, f'checkpoint-iter{epoch - 1}.pth'))
+        os.remove(os.path.join(checkpoint_dir, f'checkpoint-epoch{epoch - 1}.pth'))
     torch.save(checkpoint, filename)
 
-def _resume_checkpoint(resume_path, model, optimizer):
+def _resume_checkpoint(resume_path, model):
     print(f'Loading checkpoint : {resume_path}')
     checkpoint = torch.load(resume_path)
 
     epoch = checkpoint['epoch'] + 1
     print('Starting at epoch: ' + str(epoch))
     model.load_state_dict(checkpoint['model'])
+    optimizer = optim.Adam(model.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
     optimizer.load_state_dict(checkpoint['optimizer'])
     return epoch, model, optimizer
     
@@ -156,10 +157,11 @@ if __name__ == "__main__":
                               tgt_padded_seq_len = int(args.tgt_len))
     
     criterion = nn.CrossEntropyLoss(ignore_index=0)
-    optimizer = optim.Adam(pegasus_x.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
+    
     if args.resume:
-        start_epoch, pegasus_x, optimizer = _resume_checkpoint(args.resume, pegasus_x, optimizer)
+        start_epoch, pegasus_x, optimizer = _resume_checkpoint(args.resume, pegasus_x)
     else:
+        optimizer = optim.Adam(pegasus_x.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
         start_epoch = 1
     
     train_PegasusX(start_epoch, pegasus_x, tokenizer, criterion, optimizer, config, args)

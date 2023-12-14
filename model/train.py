@@ -139,7 +139,7 @@ if __name__ == "__main__":
     config = json.load(open("summary_page/model/config/configPEGASUS_X.json"))
     set_seed(config['seed'])
 
-    if args.pretrain == False:
+    if args.pretrain:
         train_texts, train_labels = load_data(text_path, label_path)
     else:
         dataset = load_dataset("ccdv/pubmed-summarization", streaming=True)

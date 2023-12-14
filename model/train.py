@@ -82,8 +82,6 @@ def generate_mask(src_attn_mask, tgt_attn_mask):
         return src_attn_mask, tgt_attn_mask
 
 def _save_checkpoint(epoch, model, optimizer, config):
-    if not os.path.exists(checkpoint_dir):
-        os.makedirs(checkpoint_dir)
     checkpoint = {
         'epoch': epoch,
         'optimizer': optimizer.state_dict(),
@@ -91,7 +89,8 @@ def _save_checkpoint(epoch, model, optimizer, config):
     }
     checkpoint['model'] = model.state_dict()
     filename = os.path.join(checkpoint_dir, f'checkpoint-iter{epoch}.pth')
-    os.remove(os.path.join(checkpoint_dir, f'checkpoint-iter{epoch - 1}.pth'))
+    if epoch > 1:
+        os.remove(os.path.join(checkpoint_dir, f'checkpoint-iter{epoch - 1}.pth'))
     torch.save(checkpoint, filename)
 
 def _resume_checkpoint(resume_path, model, optimizer):
@@ -138,11 +137,16 @@ def train_PegasusX(start_epoch, model, tokenizer, criterion, optimizer, config, 
 
 if __name__ == "__main__":
     args = get_arguments()
+
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
+    
     tokenizer = AutoTokenizer.from_pretrained("google/pegasus-x-base")
     src_vocab_size = len(tokenizer)
     tgt_vocab_size = src_vocab_size
     config = json.load(open("summary_page/model/config/configPEGASUS_X.json"))
     set_seed(config['seed'])
+
     pegasus_x = PegasusXModel(src_vocab_size = src_vocab_size, tgt_vocab_size = tgt_vocab_size, 
                               d_model = config["d_model"], num_heads = config["num_heads"], 
                               src_num_layers = config["src_num_layers"], tgt_num_layers = config["tgt_num_layers"], 
@@ -150,10 +154,12 @@ if __name__ == "__main__":
                               d_ff = config["decoder_ff"], dropout = config["dropout"], 
                               src_padded_seq_len = int(args.src_len), 
                               tgt_padded_seq_len = int(args.tgt_len))
+    
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = optim.Adam(pegasus_x.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
     if args.resume:
         start_epoch, pegasus_x, optimizer = _resume_checkpoint(args.resume, pegasus_x, optimizer)
     else:
         start_epoch = 1
+    
     train_PegasusX(start_epoch, pegasus_x, tokenizer, criterion, optimizer, config, args)

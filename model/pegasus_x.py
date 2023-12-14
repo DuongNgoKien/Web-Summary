@@ -59,7 +59,7 @@ class PegasusXAttention(nn.Module):
         return output
 
 class PegasusXGlobalLocalAttention(nn.Module):
-    def __init__(self, d_model, num_heads, block_size, global_len, padded_seq_len):
+    def __init__(self, d_model, num_heads, block_size, num_global_tokens, padded_seq_len):
         super(PegasusXGlobalLocalAttention, self).__init__()
         # Ensure that the model dimension (d_model) is divisible by the number of heads
         assert d_model % num_heads == 0, "d_model must be divisible by num_heads"
@@ -71,7 +71,7 @@ class PegasusXGlobalLocalAttention(nn.Module):
         self.block_size = block_size
         self.padded_seq_len = padded_seq_len
         self.num_blocks = self.padded_seq_len // block_size
-        self.global_len = global_len
+        self.num_global_tokens = num_global_tokens
         
         # Linear layers for transforming inputs
         self.W_q = nn.Linear(d_model, d_model) # Query transformation
@@ -92,7 +92,7 @@ class PegasusXGlobalLocalAttention(nn.Module):
     def compute_global_attention(self, global_k, global_q, global_v, local_k, local_v, mask):
         global_and_local_k = torch.cat([global_k, local_k], dim=2)
         global_and_local_v = torch.cat([global_v, local_v], dim=2)
-        extended_mask = nn.functional.pad(mask, pad=(self.global_len, 0))
+        extended_mask = nn.functional.pad(mask, pad=(self.num_global_tokens, 0))
 
         attn_weights = torch.einsum("BHGF,BHXF->BHGX", global_q, global_and_local_k) / math.sqrt(self.d_k)
         attn_weights = attn_weights + extended_mask[:, None, None, :]
@@ -102,16 +102,17 @@ class PegasusXGlobalLocalAttention(nn.Module):
         return attn_output
 
     def compute_local_attention(self, local_k, local_q, local_v, global_k, global_v, mask):
-        blocked_local_k = local_k.view(self.batch_size, self.num_heads, self.num_blocks, self.block_size, self.d_k)
-        blocked_local_q = local_q.view(self.batch_size, self.num_heads, self.num_blocks, self.block_size, self.d_k)
-        blocked_local_v = local_v.view(self.batch_size, self.num_heads, self.num_blocks, self.block_size, self.d_k)
+        batch_size = local_k.size()[0]
+        blocked_local_k = local_k.view(batch_size, self.num_heads, self.num_blocks, self.block_size, self.d_k)
+        blocked_local_q = local_q.view(batch_size, self.num_heads, self.num_blocks, self.block_size, self.d_k)
+        blocked_local_v = local_v.view(batch_size, self.num_heads, self.num_blocks, self.block_size, self.d_k)
 
-        attn_local2global = torch.enisum("BHNKF,BHGF->BHNKG", blocked_local_q, global_k)
+        attn_local2global = torch.einsum("BHNKF,BHGF->BHNKG", blocked_local_q, global_k)
         attn_local2local = torch.einsum("BHNKF,BHNXF->BHNKX", blocked_local_q, blocked_local_k)
 
         extended_mask = nn.functional.pad(
-            mask.view(self.batch_size, self.num_blocks, self.block_size),
-            pad=(self.global_len, 0)
+            mask.view(batch_size, self.num_blocks, self.block_size),
+            pad=(self.num_global_tokens, 0)
         )
 
         attn_weights = torch.cat((attn_local2global, attn_local2local), dim=-1)
@@ -139,7 +140,8 @@ class PegasusXGlobalLocalAttention(nn.Module):
 
         local_output = local_output.permute(0, 2, 3, 1, 4).contiguous()
         # [batch_size, padded_seq_len, hidden_dim]
-        local_output = local_output.view(self.batch_size, self.padded_seq_len, self.d_model)
+        batch_size = local_k.size()[0]
+        local_output = local_output.view(batch_size, self.padded_seq_len, self.d_model)
 
         # Combine heads and apply output transformation
         local_output = self.W_o(local_output)
@@ -176,12 +178,17 @@ class PegasusXEncoderLayer(nn.Module):
     def __init__(self, d_model, num_heads, block_size, num_global_tokens, 
                  padded_seq_len, d_ff, dropout, stagger_blocks = False):
         super(PegasusXEncoderLayer, self).__init__()
-        self.self_attn = PegasusXGlobalLocalAttention(d_model, num_heads, block_size, num_global_tokens, padded_seq_len)
-        self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
         self.norm1 = nn.LayerNorm(d_model)
         self.norm2 = nn.LayerNorm(d_model)
         self.dropout = nn.Dropout(dropout)
+        self.block_size = block_size
         self.stagger_blocks = stagger_blocks
+        if self.stagger_blocks:
+            self.padded_seq_len = padded_seq_len + block_size
+        else:
+            self.padded_seq_len = padded_seq_len
+        self.self_attn = PegasusXGlobalLocalAttention(d_model, num_heads, block_size, num_global_tokens, self.padded_seq_len)
+        self.feed_forward = PositionWiseFeedForward(d_model, d_ff)
         
     def pad_local_tokens(self, hidden_states, mask, block_size, mask_value):
         pad_size = block_size // 2
@@ -198,6 +205,7 @@ class PegasusXEncoderLayer(nn.Module):
         return padded_hidden_states, padded_mask
 
     def forward(self, hidden_states, global_hidden_states, mask):
+        local_residual = hidden_states
         if self.stagger_blocks:
             mask_value = torch.finfo(torch.float32).min
             hidden_states, mask = self.pad_local_tokens(hidden_states=hidden_states, mask=mask, 
@@ -209,7 +217,7 @@ class PegasusXEncoderLayer(nn.Module):
             pad_size = self.block_size // 2
             local_attn_output = local_attn_output[:, pad_size:-pad_size, :]
         
-        hidden_states = self.norm1(hidden_states + self.dropout(local_attn_output))
+        hidden_states = self.norm1(local_residual + self.dropout(local_attn_output))
         ff_output = self.feed_forward(hidden_states)
         hidden_states = self.norm2(hidden_states + self.dropout(ff_output))
 
@@ -242,9 +250,8 @@ class PegasusXDecoderLayer(nn.Module):
 class PegasusXModel(nn.Module):
     def __init__(self, src_vocab_size, tgt_vocab_size, d_model, num_heads, src_num_layers, tgt_num_layers, 
                  block_size, num_global_tokens, d_ff, src_padded_seq_len, 
-                 tgt_padded_seq_len, dropout, masked_prediction=False):
+                 tgt_padded_seq_len, dropout):
         super(PegasusXModel, self).__init__()
-        self.masked_prediction = masked_prediction
         self.num_global_tokens = num_global_tokens
         self.encoder_embedding = nn.Embedding(src_vocab_size, d_model)
         self.decoder_embedding = nn.Embedding(tgt_vocab_size, d_model)
@@ -258,36 +265,9 @@ class PegasusXModel(nn.Module):
         self.decoder_layers = nn.ModuleList([PegasusXDecoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(tgt_num_layers)])
 
         self.fc = nn.Linear(d_model, tgt_vocab_size)
-        self.masked_prediction = masked_prediction
-        if self.masked_prediction:
-            self.fc1 = nn.Linear(d_model, d_model)
-            self.relu = nn.ReLu()
-            self.norm = nn.LayerNorm(d_model)
-
         self.dropout = nn.Dropout(dropout)
 
-    def generate_mask(self, src_attn_mask, tgt_attn_mask):
-        src_attn_mask = src_attn_mask.to(dtype=torch.float32)
-        mask_min_value = torch.finfo(torch.float32).min
-        src_attn_mask = 1.0 - src_attn_mask
-        src_attn_mask = src_attn_mask.masked_fill(
-            src_attn_mask.to(torch.bool),
-            mask_min_value,
-        )
-
-        tgt_attn_mask = tgt_attn_mask.unsqueeze(1).unsqueeze(3)
-        tgt_seq_length = tgt_attn_mask.size(1)
-        nopeak_mask = (1 - torch.triu(torch.ones(1, tgt_seq_length, tgt_seq_length), diagonal=1)).bool()
-        tgt_attn_mask = tgt_attn_mask & nopeak_mask
-        tgt_attn_mask = 1.0 - tgt_attn_mask
-        tgt_attn_mask = tgt_attn_mask.masked_fill(
-            tgt_attn_mask.to(torch.bool),
-            mask_min_value,
-        )
-        return src_attn_mask, tgt_attn_mask
-
-    def forward(self, src, tgt):
-        src_attn_mask, tgt_attn_mask = self.generate_mask(src, tgt)
+    def forward(self, src, tgt, src_attn_mask, tgt_attn_mask):
         src_embedded = self.dropout(self.src_positional_encoding(self.encoder_embedding(src)))
         tgt_embedded = self.dropout(self.tgt_positional_encoding(self.decoder_embedding(tgt)))
         batch_size=1
@@ -306,8 +286,4 @@ class PegasusXModel(nn.Module):
             dec_output = dec_layer(dec_output, enc_output, src_attn_mask, tgt_attn_mask)
 
         output = self.fc(dec_output)
-        if self.masked_prediction:
-            output_logits = self.fc(self.norm(self.relu(self.fc1(enc_output))))
-        else:
-            output_logits = None
-        return enc_output, output, output_logits
+        return enc_output, output

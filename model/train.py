@@ -12,9 +12,8 @@ from tqdm import tqdm
 
 torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
 output_dir = './results'
-text_path = 'model/data/C4_small/texts.txt'
-label_path = 'model/data/C4_small/labels.txt'
-num_epochs = 450
+text_path = 'summary_page/model/data/C4_small/texts.txt'
+label_path = 'summary_page/model/data/C4_small/labels.txt'
 
 def set_seed(seed=42):
     np.random.seed(seed)
@@ -42,9 +41,32 @@ class PegasusDataset(Dataset):
     def __getitem__(self, idx):
         item = {key: torch.tensor(val[idx]) for key, val in self.encodings.items()}
         item['labels'] = torch.tensor(self.labels['input_ids'][idx])
+        item['tgt_attention_mask'] = torch.tensor(self.labels['attention_mask'][idx])
         return item
     def __len__(self):
         return len(self.encodings.input_ids)
+    
+def generate_mask(src_attn_mask, tgt_attn_mask):
+        src_attn_mask = src_attn_mask.to(dtype=torch.float32)
+        mask_min_value = torch.finfo(torch.float32).min
+        src_attn_mask = 1.0 - src_attn_mask
+        src_attn_mask = src_attn_mask.masked_fill(
+            src_attn_mask.to(torch.bool),
+            mask_min_value,
+        )
+
+        tgt_attn_mask = torch.Tensor([[1,1,1,0,0]]).int()
+        tgt_seq_length = tgt_attn_mask.size(1)
+        tgt_attn_mask = tgt_attn_mask[:,None,:].expand(-1,-1,tgt_seq_length)
+        nopeak_mask = (1 - torch.triu(torch.ones(1, tgt_seq_length, tgt_seq_length), diagonal=1)).bool()
+        nopeak_mask = nopeak_mask.to(torch_device)
+        tgt_attn_mask = tgt_attn_mask & nopeak_mask
+        tgt_attn_mask = 1.0 - tgt_attn_mask
+        tgt_attn_mask = tgt_attn_mask.masked_fill(
+            tgt_attn_mask.to(torch.bool),
+            mask_min_value,
+        )
+        return src_attn_mask, tgt_attn_mask
     
 def train_PegasusX(model, tokenizer, criterion, optimizer, config):
     train_texts, train_labels = load_data(text_path, label_path)
@@ -60,16 +82,17 @@ def train_PegasusX(model, tokenizer, criterion, optimizer, config):
     for _ in range(config['epochs']):
         loop = tqdm(loader, leave=True)
         for batch in loop:
-            optim.zero_grad()
+            optimizer.zero_grad()
 
             input_ids = batch['input_ids'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
+            src_attention_mask = batch['attention_mask'].to(device)
+            tgt_attention_mask = batch['tgt_attention_mask'].to(device)
+            src_attention_mask, tgt_attention_mask = generate_mask(src_attention_mask, tgt_attention_mask)
             labels = batch['labels'].to(device)
             # process
-            outputs = model(input_ids, attention_mask=attention_mask,
-                        labels=labels)
-            
-            loss = criterion(outputs)
+            _, outputs = model(input_ids,labels, src_attention_mask, tgt_attention_mask)
+            loss = criterion(outputs[:,:-1,:].permute(0,2,1).contiguous(), labels[:,1:])
+            print(loss)
             loss.backward()
             optimizer.step()
 
@@ -77,12 +100,15 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained("google/pegasus-x-base")
     src_vocab_size = len(tokenizer)
     tgt_vocab_size = src_vocab_size
-    config = json.load(open("model/config/configPEGASUS_X.json"))
+    config = json.load(open("summary_page/model/config/configPEGASUS_X.json"))
     set_seed(config['seed'])
-    pegasus_x = PegasusXModel(src_vocab_size = src_vocab_size, tgt_vocab_size = tgt_vocab_size, d_model = 768,
-                               num_heads = 12, src_num_layers = 12, tgt_num_layers = 12, 
-                 block_size = 512, num_global_tokens = 128, d_ff = 3072, src_padded_seq_len = 16384, 
-                 tgt_padded_seq_len = 256, dropout = 0.1, masked_prediction=False)
+    pegasus_x = PegasusXModel(src_vocab_size = src_vocab_size, tgt_vocab_size = tgt_vocab_size, 
+                              d_model = config["d_model"], num_heads = config["num_heads"], 
+                              src_num_layers = config["src_num_layers"], tgt_num_layers = config["tgt_num_layers"], 
+                              block_size = config["block_size"], num_global_tokens = config["num_global_tokens"], 
+                              d_ff = config["decoder_ff"], dropout = config["dropout"], 
+                              src_padded_seq_len = config["src_padded_seq_len"], 
+                              tgt_padded_seq_len = config["tgt_padded_seq_len"])
     criterion = nn.CrossEntropyLoss(ignore_index=0)
     optimizer = optim.Adam(pegasus_x.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)
     train_PegasusX(pegasus_x, tokenizer, criterion, optimizer, config)

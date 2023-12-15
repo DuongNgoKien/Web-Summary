@@ -162,6 +162,7 @@ class PositionalEncoding(nn.Module):
     def __init__(self, d_model):
         super(PositionalEncoding, self).__init__()
         self.d_model = d_model
+        self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         
     def forward(self, x):
         max_seq_length = x.size()[1]
@@ -172,7 +173,7 @@ class PositionalEncoding(nn.Module):
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         
-        pe = pe.unsqueeze(0)
+        pe = pe.unsqueeze(0).to(self.device)
         return x + pe[:, :x.size(1)]
 
 class PegasusXEncoderLayer(nn.Module):

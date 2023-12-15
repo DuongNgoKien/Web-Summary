@@ -36,6 +36,7 @@ def get_arguments():
     parser.add_argument("--src_len", help="src padded sequence length")
     parser.add_argument("--tgt_len", help="tgt padded sequence length")
     parser.add_argument("--pretrain", default=True, help="pretrain pegasus_x model with C4 dataset")
+    parser.add_argument("--epochs", default=1, help="number epochs")
     parser.add_argument("-r", "--resume", type=str, default=None,
                         help='Path to the .pth file to resume from (default: None)')
     return parser.parse_args()
@@ -103,7 +104,7 @@ def _resume_checkpoint(resume_path, model, optimizer):
 def train_PegasusX(start_epoch, model, loader, criterion, optimizer, checkpoint_dir, config, args):
     model.train()
 
-    for epoch in range(start_epoch, start_epoch + config['epochs']):
+    for epoch in range(start_epoch, start_epoch + args.epochs):
         loop = tqdm(loader, leave=True)
         for batch in loop:
             optimizer.zero_grad()

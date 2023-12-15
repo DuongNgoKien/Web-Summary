@@ -104,7 +104,7 @@ def _resume_checkpoint(resume_path, model, optimizer):
 def train_PegasusX(start_epoch, model, loader, criterion, optimizer, checkpoint_dir, config, args):
     model.train()
 
-    for epoch in range(start_epoch, start_epoch + args.epochs):
+    for epoch in range(start_epoch, start_epoch + int(args.epochs)):
         loop = tqdm(loader, leave=True)
         for batch in loop:
             optimizer.zero_grad()

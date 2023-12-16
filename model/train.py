@@ -126,11 +126,11 @@ if __name__ == "__main__":
     args = get_arguments()
 
     if args.pretrain:
-        checkpoint_dir = 'summary_page/model/pretrain/checkpoint'
+        checkpoint_dir = 'summary_page/model/checkpoint/pretrain'
         text_path = 'summary_page/model/data/C4_small/texts.txt'
         label_path = 'summary_page/model/data/C4_small/labels.txt'
     else:
-        checkpoint_dir = 'summary_page/model/finetune/checkpoint'
+        checkpoint_dir = 'summary_page/model/checkpoint/finetune'
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
     
@@ -138,6 +138,7 @@ if __name__ == "__main__":
     src_vocab_size = len(tokenizer)
     tgt_vocab_size = src_vocab_size
     config = json.load(open("summary_page/model/config/configPEGASUS_X.json"))
+    config['seed'] = 2
     set_seed(config['seed'])
 
     if args.pretrain:

@@ -138,7 +138,7 @@ if __name__ == "__main__":
     src_vocab_size = len(tokenizer)
     tgt_vocab_size = src_vocab_size
     config = json.load(open("summary_page/model/config/configPEGASUS_X.json"))
-    config['seed'] = 2
+    config['seed'] = 3
     set_seed(config['seed'])
 
     if args.pretrain:
@@ -162,8 +162,7 @@ if __name__ == "__main__":
                               src_num_layers = config["src_num_layers"], tgt_num_layers = config["tgt_num_layers"], 
                               block_size = config["block_size"], num_global_tokens = config["num_global_tokens"], 
                               d_ff = config["decoder_ff"], dropout = config["dropout"], 
-                              src_padded_seq_len = int(args.src_len), 
-                              tgt_padded_seq_len = int(args.tgt_len))
+                              src_padded_seq_len = int(args.src_len))
     pegasus_x.to(torch_device)
     
     optimizer = optim.Adam(pegasus_x.parameters(), lr=0.0001, betas=(0.9, 0.98), eps=1e-9)

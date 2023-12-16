@@ -251,8 +251,7 @@ class PegasusXDecoderLayer(nn.Module):
 
 class PegasusXModel(nn.Module):
     def __init__(self, src_vocab_size, tgt_vocab_size, d_model, num_heads, src_num_layers, tgt_num_layers, 
-                 block_size, num_global_tokens, d_ff, src_padded_seq_len, 
-                 tgt_padded_seq_len, dropout):
+                 block_size, num_global_tokens, d_ff, src_padded_seq_len, dropout):
         super(PegasusXModel, self).__init__()
         self.num_global_tokens = num_global_tokens
         self.encoder_embedding = nn.Embedding(src_vocab_size, d_model)

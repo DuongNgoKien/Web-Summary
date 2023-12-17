@@ -103,7 +103,6 @@ def _resume_checkpoint(resume_path, model, optimizer):
     
 def train_PegasusX(start_epoch, model, loader, criterion, optimizer, checkpoint_dir, config, args):
     model.train()
-
     for epoch in range(start_epoch, start_epoch + int(args.epochs)):
         loop = tqdm(loader, leave=True)
         for batch in loop:
@@ -144,6 +143,7 @@ if __name__ == "__main__":
     if args.pretrain:
         train_texts, train_labels = load_data(text_path, label_path)
     else:
+        print('start load dataset')
         dataset = load_dataset("ccdv/pubmed-summarization", streaming=True)
         train_texts = []
         train_labels = []
@@ -155,6 +155,7 @@ if __name__ == "__main__":
     inputs = tokenizer(train_texts, return_tensors='pt', padding='max_length', max_length=int(args.src_len), truncation=True)
     labels = tokenizer(train_labels, return_tensors='pt', padding='max_length', max_length=int(args.tgt_len), truncation=True)
     dataset = PegasusDataset(inputs, labels)
+    print(len(dataset))
     loader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=True)
 
     pegasus_x = PegasusXModel(src_vocab_size = src_vocab_size, tgt_vocab_size = tgt_vocab_size, 

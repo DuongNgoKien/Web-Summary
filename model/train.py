@@ -98,7 +98,7 @@ def _resume_checkpoint(resume_path, model, optimizer):
     epoch = checkpoint['epoch'] + 1
     print('Starting at epoch: ' + str(epoch))
     model.load_state_dict(checkpoint['model'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
+    #optimizer.load_state_dict(checkpoint['optimizer'])
     return epoch
     
 def train_PegasusX(start_epoch, model, loader, criterion, optimizer, checkpoint_dir, config, args):
@@ -138,7 +138,6 @@ if __name__ == "__main__":
     src_vocab_size = len(tokenizer)
     tgt_vocab_size = src_vocab_size
     config = json.load(open("summary_page/model/config/configPEGASUS_X.json"))
-    config['seed'] = 3
     set_seed(config['seed'])
 
     if args.pretrain:

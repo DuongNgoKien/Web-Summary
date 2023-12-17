@@ -98,7 +98,7 @@ def _resume_checkpoint(resume_path, model, optimizer):
     epoch = checkpoint['epoch'] + 1
     print('Starting at epoch: ' + str(epoch))
     model.load_state_dict(checkpoint['model'])
-    #optimizer.load_state_dict(checkpoint['optimizer'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
     return epoch
     
 def train_PegasusX(start_epoch, model, loader, criterion, optimizer, checkpoint_dir, config, args):

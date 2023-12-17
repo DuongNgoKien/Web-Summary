@@ -35,7 +35,7 @@ def get_arguments():
     parser = argparse.ArgumentParser(description="PEGASUS_X hyperparameters")
     parser.add_argument("--src_len", help="src padded sequence length")
     parser.add_argument("--tgt_len", help="tgt padded sequence length")
-    parser.add_argument("--pretrain", default=True, help="pretrain pegasus_x model with C4 dataset")
+    parser.add_argument("--pretrain", default=True, type=bool, help="pretrain pegasus_x model with C4 dataset")
     parser.add_argument("--epochs", default=1, help="number epochs")
     parser.add_argument("-r", "--resume", type=str, default=None,
                         help='Path to the .pth file to resume from (default: None)')
@@ -123,7 +123,6 @@ def train_PegasusX(start_epoch, model, loader, criterion, optimizer, checkpoint_
 
 if __name__ == "__main__":
     args = get_arguments()
-    print(args.pretrain)
 
     if args.pretrain:
         checkpoint_dir = 'summary_page/model/checkpoint/pretrain'
@@ -143,7 +142,6 @@ if __name__ == "__main__":
     if args.pretrain:
         train_texts, train_labels = load_data(text_path, label_path)
     else:
-        print('start load dataset')
         dataset = load_dataset("ccdv/pubmed-summarization", streaming=True)
         train_texts = []
         train_labels = []
@@ -155,7 +153,6 @@ if __name__ == "__main__":
     inputs = tokenizer(train_texts, return_tensors='pt', padding='max_length', max_length=int(args.src_len), truncation=True)
     labels = tokenizer(train_labels, return_tensors='pt', padding='max_length', max_length=int(args.tgt_len), truncation=True)
     dataset = PegasusDataset(inputs, labels)
-    print(len(dataset))
     loader = DataLoader(dataset, batch_size=config['batch_size'], shuffle=True)
 
     pegasus_x = PegasusXModel(src_vocab_size = src_vocab_size, tgt_vocab_size = tgt_vocab_size, 

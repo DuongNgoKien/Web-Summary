@@ -124,6 +124,7 @@ def train_PegasusX(start_epoch, model, loader, criterion, optimizer, checkpoint_
 
 if __name__ == "__main__":
     args = get_arguments()
+    print(args.pretrain)
 
     if args.pretrain:
         checkpoint_dir = 'summary_page/model/checkpoint/pretrain'

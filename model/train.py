@@ -170,6 +170,7 @@ if __name__ == "__main__":
 
     if args.resume:
         start_epoch = _resume_checkpoint(args.resume, pegasus_x, optimizer)
+        start_epoch = 1
     else:
         start_epoch = 1
     

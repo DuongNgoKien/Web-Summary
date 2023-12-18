@@ -90,5 +90,5 @@ if __name__ == "__main__":
         src_attention_mask = batch['attention_mask'].to(torch_device)
         labels = batch['labels'].to(torch_device)
             # process
-        _, outputs = generate_predictions(pegasus_x, input_ids, tokenizer, start_token, end_token, src_attention_mask, max_length=max_length_output) 
+        outputs = generate_predictions(pegasus_x, input_ids, tokenizer, start_token, end_token, src_attention_mask, max_length=max_length_output) 
         print(outputs)

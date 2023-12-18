@@ -37,18 +37,16 @@ def generate_predictions(model, input, tokenizer, start_token, end_token, src_at
             # Sample the next token using the logits
             next_token = torch.multinomial(F.softmax(logits, dim=-1), 1)
 
-            # Append the next token to the target sequence
-            if index < max_length-1:
-              target_sequence[0,index+1] = next_token
-
             # Check for the end token to stop generation
             if next_token.item() == end_token:  # Assuming end_token is defined
                 break
 
-    # Convert the predicted indices back to text (replace with your own logic)
-    predicted_text = " ".join([tokenizer.decode([idx.item()]) for idx in target_sequence[0]])
-    predicted_text = predicted_text.replace("<pad>", "").replace("</s>", "")
+            # Append the next token to the target sequence
+            if index < max_length-1:
+              target_sequence[0,index+1] = next_token
 
+    # Convert the predicted indices back to text (replace with your own logic)
+    predicted_text = tokenizer.decode(target_sequence[0,1:].tolist())
     return predicted_text
 
 if __name__ == "__main__":

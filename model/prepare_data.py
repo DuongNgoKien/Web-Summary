@@ -1,7 +1,6 @@
 import torch
-import model.evaluate as evaluate
+import evaluate
 import nltk
-from tqdm import tqdm
 from datasets import load_dataset
 
 text_path = '/kaggle/working/texts.txt'

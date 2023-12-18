@@ -3,10 +3,11 @@ from transformers import AutoTokenizer
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 from datasets import load_dataset
-import json
 from pegasus_x import PegasusXModel
 from train import PegasusDataset, generate_mask, _resume_checkpoint
 from tqdm import tqdm
+import json
+import evaluate
 
 torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
 path_checkpoint = '/kaggle/input/pegasus/summary_page/model/checkpoint/finetune/checkpoint-epoch3.pth'
@@ -63,7 +64,6 @@ if __name__ == "__main__":
     for index, sample in enumerate(dataset['test']):
         test_texts.append(sample['article'])
         test_labels.append(sample['abstract'])
-        if index == 10: break
     
     max_length_input = 6400
     max_length_output = 256
@@ -83,11 +83,17 @@ if __name__ == "__main__":
     pegasus_x.to(torch_device)
     _resume_checkpoint(path_checkpoint, pegasus_x, optimizer=None)
     
+    predictions = []
+    rouge = evaluate.load('rouge')
     loop = tqdm(loader, leave=True)
     for batch in loop:
         input_ids = batch['input_ids'].to(torch_device)
         src_attention_mask = batch['attention_mask'].to(torch_device)
-        labels = batch['labels'].to(torch_device)
-            # process
+        # process
         outputs = generate_predictions(pegasus_x, input_ids, tokenizer, start_token, end_token, src_attention_mask, max_length=max_length_output) 
-        print(outputs)
+        predictions.append(outputs)
+    print(test_labels[1])
+    rouge_score = rouge.compute(predictions=predictions, references=test_labels)
+    print(rouge_score)
+
+        

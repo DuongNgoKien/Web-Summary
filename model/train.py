@@ -61,9 +61,9 @@ class PegasusDataset(Dataset):
         return len(self.encodings.input_ids)
     
 def generate_mask(src_attn_mask, tgt_attn_mask):
+        mask_min_value = torch.finfo(torch.float32).min
         if src_attn_mask is not None:
             src_attn_mask = src_attn_mask.to(dtype=torch.float32)
-            mask_min_value = torch.finfo(torch.float32).min
             src_attn_mask = 1.0 - src_attn_mask
             src_attn_mask = src_attn_mask.masked_fill(
                 src_attn_mask.to(torch.bool),

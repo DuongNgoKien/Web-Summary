@@ -61,24 +61,26 @@ class PegasusDataset(Dataset):
         return len(self.encodings.input_ids)
     
 def generate_mask(src_attn_mask, tgt_attn_mask):
-        src_attn_mask = src_attn_mask.to(dtype=torch.float32)
-        mask_min_value = torch.finfo(torch.float32).min
-        src_attn_mask = 1.0 - src_attn_mask
-        src_attn_mask = src_attn_mask.masked_fill(
-            src_attn_mask.to(torch.bool),
-            mask_min_value,
-        )
-
-        tgt_seq_length = tgt_attn_mask.size(1)
-        tgt_attn_mask = tgt_attn_mask[:,None,:].expand(-1,-1,tgt_seq_length)
-        nopeak_mask = (1 - torch.triu(torch.ones(1, tgt_seq_length, tgt_seq_length), diagonal=1)).bool()
-        nopeak_mask = nopeak_mask.to(torch_device)
-        tgt_attn_mask = tgt_attn_mask & nopeak_mask
-        tgt_attn_mask = 1.0 - tgt_attn_mask
-        tgt_attn_mask = tgt_attn_mask.masked_fill(
-            tgt_attn_mask.to(torch.bool),
-            mask_min_value,
-        )
+        if src_attn_mask is not None:
+            src_attn_mask = src_attn_mask.to(dtype=torch.float32)
+            mask_min_value = torch.finfo(torch.float32).min
+            src_attn_mask = 1.0 - src_attn_mask
+            src_attn_mask = src_attn_mask.masked_fill(
+                src_attn_mask.to(torch.bool),
+                mask_min_value,
+            )
+        
+        if tgt_attn_mask is not None:
+            tgt_seq_length = tgt_attn_mask.size(1)
+            tgt_attn_mask = tgt_attn_mask[:,None,:].expand(-1,-1,tgt_seq_length)
+            nopeak_mask = (1 - torch.triu(torch.ones(1, tgt_seq_length, tgt_seq_length), diagonal=1)).bool()
+            nopeak_mask = nopeak_mask.to(torch_device)
+            tgt_attn_mask = tgt_attn_mask & nopeak_mask
+            tgt_attn_mask = 1.0 - tgt_attn_mask
+            tgt_attn_mask = tgt_attn_mask.masked_fill(
+                tgt_attn_mask.to(torch.bool),
+                mask_min_value,
+            )
         return src_attn_mask, tgt_attn_mask
 
 def _save_checkpoint(epoch, model, optimizer, checkpoint_dir, config):
@@ -98,7 +100,8 @@ def _resume_checkpoint(resume_path, model, optimizer):
     epoch = checkpoint['epoch'] + 1
     print('Starting at epoch: ' + str(epoch))
     model.load_state_dict(checkpoint['model'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
+    if optimizer is not None: 
+        optimizer.load_state_dict(checkpoint['optimizer'])
     return epoch
     
 def train_PegasusX(start_epoch, model, loader, criterion, optimizer, checkpoint_dir, config, args):
@@ -147,7 +150,7 @@ if __name__ == "__main__":
         for index, sample in enumerate(dataset['train']):
             if index == 10000: break
             train_texts.append(sample['article'])
-            train_labels.append(sample['abstract'])
+            train_labels.append("<pad>" + sample['abstract'])
     
     inputs = tokenizer(train_texts, return_tensors='pt', padding='max_length', max_length=int(args.src_len), truncation=True)
     labels = tokenizer(train_labels, return_tensors='pt', padding='max_length', max_length=int(args.tgt_len), truncation=True)

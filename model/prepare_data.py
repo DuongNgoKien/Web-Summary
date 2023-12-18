@@ -1,5 +1,5 @@
 import torch
-import evaluate
+import model.evaluate as evaluate
 import nltk
 from tqdm import tqdm
 from datasets import load_dataset
@@ -8,7 +8,7 @@ text_path = '/kaggle/working/texts.txt'
 label_path = '/kaggle/working/labels.txt'
 
 def process_data(rouge, document):
-    labels = ""
+    labels = "<pad>"
     l_sentences = []
     for s in document.split("\n"):
         s = nltk.sent_tokenize(s)
@@ -39,12 +39,12 @@ if __name__ == "__main__":
     dataset = load_dataset('c4', 'en', streaming=True)
     lis_doc = []
     for index, sample in enumerate(dataset['train']):
-        if index == 40000: break
+        if index == 50000: break
         lis_doc.append(sample['text'])
     f_text = open(text_path, "a", encoding='utf-8')
     f_label = open(label_path, "a", encoding='utf-8')
     print('start_processing')
-    for index in range(0, 40000):
+    for index in range(0, 50000):
         doc, label = process_data(rouge, lis_doc[index])
         if index % 100 == 0:
             print(index)

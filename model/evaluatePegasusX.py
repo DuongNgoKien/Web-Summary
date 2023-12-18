@@ -8,9 +8,22 @@ from train import PegasusDataset, generate_mask, _resume_checkpoint
 from tqdm import tqdm
 import json
 import evaluate
+import argparse
 
 torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
 path_checkpoint = '/kaggle/input/pegasus/summary_page/model/checkpoint/finetune/checkpoint-epoch3.pth'
+
+def get_arguments():
+    """Parse all the arguments provided from the CLI.
+
+    Returns:
+      A list of parsed arguments.
+    """
+    parser = argparse.ArgumentParser(description="PEGASUS_X hyperparameters")
+    parser.add_argument("--start_idx", help="start id of test dataset")
+    parser.add_argument("--end_idx", help="start id of test dataset")
+    return parser.parse_args()
+
 
 def generate_predictions(model, input, tokenizer, start_token, end_token, src_attn_mask, max_length=256, temperature=1.0):
     model.eval()
@@ -52,6 +65,7 @@ def generate_predictions(model, input, tokenizer, start_token, end_token, src_at
 
 if __name__ == "__main__":
     config = json.load(open("summary_page/model/config/configPEGASUS_X.json"))
+    args = get_arguments()
 
     tokenizer = AutoTokenizer.from_pretrained("google/pegasus-x-base")
     start_token = 0
@@ -62,8 +76,9 @@ if __name__ == "__main__":
     test_texts = []
     test_labels = []
     for index, sample in enumerate(dataset['test']):
-        test_texts.append(sample['article'])
-        test_labels.append(sample['abstract'])
+        if index >= int(args.start_idx) and index < int(args.end_idx):
+            test_texts.append(sample['article'])
+            test_labels.append(sample['abstract'])
     
     max_length_input = 6400
     max_length_output = 256

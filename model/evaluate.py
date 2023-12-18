@@ -47,6 +47,7 @@ def generate_predictions(model, input, tokenizer, start_token, end_token, src_at
 
     # Convert the predicted indices back to text (replace with your own logic)
     predicted_text = " ".join([tokenizer.decode([idx.item()]) for idx in target_sequence[0]])
+    predicted_text = predicted_text.replace("<pad>", "").replace("</s>", "")
 
     return predicted_text
 

@@ -46,7 +46,7 @@ def generate_predictions(model, input, tokenizer, start_token, end_token, src_at
               target_sequence[0,index+1] = next_token
 
     # Convert the predicted indices back to text (replace with your own logic)
-    predicted_text = tokenizer.decode(target_sequence[0,1:].tolist())
+    predicted_text = tokenizer.decode(target_sequence[0,1:index+1].tolist())
     return predicted_text
 
 if __name__ == "__main__":

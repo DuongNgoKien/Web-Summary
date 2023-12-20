@@ -3,8 +3,8 @@ import evaluate
 import nltk
 from datasets import load_dataset
 
-text_path = '/kaggle/working/texts.txt'
-label_path = '/kaggle/working/labels.txt'
+text_path = 'model/data/C4_small/texts.txt'
+label_path = 'model/data/C4_small/labels.txt'
 
 def process_data(rouge, document):
     labels = "<pad>"

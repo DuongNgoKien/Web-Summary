@@ -127,18 +127,18 @@ def train_PegasusX(start_epoch, model, loader, criterion, optimizer, checkpoint_
 if __name__ == "__main__":
     args = get_arguments()
     if args.pretrain:
-        checkpoint_dir = 'summary_page/model/checkpoint/pretrain'
-        text_path = 'summary_page/model/data/C4_small/texts.txt'
-        label_path = 'summary_page/model/data/C4_small/labels.txt'
+        checkpoint_dir = 'model/checkpoint/pretrain'
+        text_path = 'model/data/C4_small/texts.txt'
+        label_path = 'model/data/C4_small/labels.txt'
     else:
-        checkpoint_dir = 'summary_page/model/checkpoint/finetune'
+        checkpoint_dir = 'model/checkpoint/finetune'
     if not os.path.exists(checkpoint_dir):
         os.makedirs(checkpoint_dir)
     
     tokenizer = AutoTokenizer.from_pretrained("google/pegasus-x-base")
     src_vocab_size = len(tokenizer)
     tgt_vocab_size = src_vocab_size
-    config = json.load(open("summary_page/model/config/configPEGASUS_X.json"))
+    config = json.load(open("model/config/configPEGASUS_X.json"))
     set_seed(config['seed'])
 
     if args.pretrain:

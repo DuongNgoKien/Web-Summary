@@ -11,7 +11,7 @@ import evaluate
 import argparse
 
 torch_device = 'cuda' if torch.cuda.is_available() else 'cpu'
-path_checkpoint = '/kaggle/input/pegasus/summary_page/model/checkpoint/finetune/checkpoint-epoch3.pth'
+path_checkpoint = 'model/checkpoint/finetune/checkpoint-PubMed.pth'
 
 def get_arguments():
     """Parse all the arguments provided from the CLI.

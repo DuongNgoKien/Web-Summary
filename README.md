@@ -8,9 +8,9 @@ The Text Summarization Google extension simplifies online reading by condensing 
 
 ## Getting started
 
-git clone https://gitlab.com/DuongKien2001/summary_page
-cd summary_page
-pip install -r requirements.txt
+- git clone https://gitlab.com/DuongKien2001/summary_page
+- cd summary_page
+- pip install -r requirements.txt
 
 ## Run training and testing
 

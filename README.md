@@ -6,6 +6,11 @@ The Text Summarization Google extension simplifies online reading by condensing 
 
 ![Alt text](resources/web_summary.png)
 
+## Prerequisite
+*  CUDA/CUDNN 
+*  Python3
+*  Packages found in requirements.txt
+
 ## Getting started
 
 - git clone https://gitlab.com/DuongKien2001/summary_page
@@ -29,6 +34,10 @@ python model/train.py --src_len 6400 --tgt_len 256 --epochs 3 --no-pretrain -r *
 ### Evaluate the model with the PubMed test set
 
 python model/evaluatePegasusX.py --start_idx 0 --end_idx 7000
+
+## Start backend server
+
+python backend/main.py
 
 ## Pretrained models
 

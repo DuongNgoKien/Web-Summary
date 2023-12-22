@@ -64,7 +64,7 @@ def generate_predictions(model, input, tokenizer, start_token, end_token, src_at
     return predicted_text
 
 if __name__ == "__main__":
-    config = json.load(open("summary_page/model/config/configPEGASUS_X.json"))
+    config = json.load(open("model/config/configPEGASUS_X.json"))
     args = get_arguments()
 
     tokenizer = AutoTokenizer.from_pretrained("google/pegasus-x-base")
